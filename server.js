@@ -88,3 +88,43 @@ app.listen(PORT, () => console.log(`🌐 Servidor escuchando en puerto ${PORT}`)
     console.error('❌ Error creando tabla clientes:', err.message);
   }
 })();
+// Obtener un cliente por id (opcional)
+app.get('/api/clientes/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM clientes WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'No encontrado' });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Actualizar (PUT)
+app.put('/api/clientes/:id', async (req, res) => {
+  try {
+    const { nombre, email, telefono } = req.body || {};
+    if (!nombre || !email) return res.status(400).json({ error: 'Nombre y email son obligatorios' });
+
+    const { rows } = await pool.query(
+      `UPDATE clientes SET nombre=$1, email=$2, telefono=$3 WHERE id=$4
+       RETURNING id, nombre, email, telefono, creado_en`,
+      [nombre, email, telefono || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'No encontrado' });
+    res.json(rows[0]);
+  } catch (e) {
+    if ((e.code || '') === '23505') return res.status(409).json({ error: 'El email ya existe' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Eliminar (DELETE)
+app.delete('/api/clientes/:id', async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM clientes WHERE id=$1', [req.params.id]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'No encontrado' });
+    res.status(204).send();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
